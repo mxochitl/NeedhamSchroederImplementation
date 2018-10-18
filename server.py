@@ -3,6 +3,7 @@ import sys
 import traceback
 import client1
 import client2
+import random
 from threading import Thread
 
 g = 71
@@ -14,7 +15,7 @@ def main():
 
 def start_server():
     host = "127.0.0.1"
-    port = 4547         # arbitrary non-privileged port
+    port = 4598         # arbitrary non-privileged port
     conns = {}
     
     k_a = -1000
@@ -58,8 +59,7 @@ def start_server():
 
     soc.close()
 
-def diffieHellman(connection):
-    user = conns[connection.getpeername()][0]
+def diffieHellman(connection, user):
     # make random key
     key = ''
     for i in range(10):
@@ -67,10 +67,18 @@ def diffieHellman(connection):
     
     key = int(key,2)
 
-    # send p and g to client
-    connection.send([p,g,user.encode()])
+    # send n and g to client
+    connection.send('{:}|{:}|{:}'.format(n,g,user).encode())
 
-    k1 = (g ** KDC_secret) % PUBLIC_P
+    k1 = (g ** key) % n
+    connection.send(str(k1).encode())
+
+    #Waiting for Server to send it's first part of DH. Converts it into an int to be used later
+    client_1 = int(connection.recv(1024).decode("utf8").rstrip())
+
+    sharedKey = (client_1 ** key) % n
+    print("Finished Diffie-Hellman with User {:}.\n".format(user))
+    return bin(sharedKey)[2:].zfill(10)
 
 
 
@@ -80,6 +88,7 @@ def client_thread(connection, ip, port, conns, max_buffer_size = 5120):
     user = conns[connection.getpeername()][0]
     print("Diffie Hellman Key Exchange with client"+str(user))
     # call diffie hellman 
+    diffieHellman(connection, user)
 
     while is_active:
         client_input = receive_input(connection, conns, max_buffer_size)
